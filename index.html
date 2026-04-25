@@ -16,6 +16,7 @@
     --green: #43e97b;
     --yellow: #f9ca24;
     --red: #ff4757;
+    --cyan: #00cec9;
     --text: #f0f0f5;
     --muted: #888899;
   }
@@ -126,12 +127,14 @@
     letter-spacing: 1px;
     text-transform: uppercase;
   }
-  .badge-countdown { background: #f9ca2422; color: var(--yellow); }
-  .badge-hang      { background: #6c63ff22; color: var(--accent); }
-  .badge-fast      { background: #ff475722; color: var(--red); }
-  .badge-slow      { background: #43e97b22; color: var(--green); }
-  .badge-ready     { background: #88889922; color: var(--muted); }
-  .badge-done      { background: #43e97b33; color: var(--green); }
+  .badge-countdown  { background: #f9ca2422; color: var(--yellow); }
+  .badge-hang       { background: #6c63ff22; color: var(--accent); }
+  .badge-fast       { background: #ff475722; color: var(--red); }
+  .badge-slow       { background: #43e97b22; color: var(--green); }
+  .badge-ready      { background: #88889922; color: var(--muted); }
+  .badge-done       { background: #43e97b33; color: var(--green); }
+  .badge-breath-in  { background: #6c63ff22; color: var(--accent); }
+  .badge-breath-out { background: #00cec922; color: var(--cyan); }
 
   /* ── Interval info ── */
   .interval-info {
@@ -261,6 +264,9 @@
   <button class="tab" onclick="switchTab('quick')">
     <span class="icon">⚡</span>Quick
   </button>
+  <button class="tab" onclick="switchTab('breath')">
+    <span class="icon">🫁</span>หายใจ
+  </button>
 </div>
 
 <!-- ══════════════════ DEAD HANG ══════════════════ -->
@@ -382,6 +388,48 @@
   </div>
 </div>
 
+<!-- ══════════════════ BREATHING TIMER ══════════════════ -->
+<div id="screen-breath" class="screen">
+  <div class="status-badge">
+    <span id="breath-badge" class="badge badge-ready">พร้อม</span>
+  </div>
+
+  <div class="ring-wrap">
+    <svg class="ring-svg" width="220" height="220" viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="100"/>
+      <circle id="breath-ring" class="ring-fg" cx="110" cy="110" r="100"
+        stroke="#6c63ff"
+        stroke-dasharray="628.3"
+        stroke-dashoffset="628.3"/>
+    </svg>
+    <div class="timer-center">
+      <div id="breath-display" class="timer-display">0:04</div>
+      <div id="breath-sublabel" class="timer-label">แตะเริ่ม</div>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="val" id="breath-cycles">0</div>
+      <div class="lbl">รอบ</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" style="color:var(--accent)">4<span style="font-size:0.85rem"> วิ</span></div>
+      <div class="lbl">หายใจเข้า</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" style="color:var(--cyan)">8<span style="font-size:0.85rem"> วิ</span></div>
+      <div class="lbl">หายใจออก</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="breath-start-btn" class="btn btn-primary" onclick="breathStart()">เริ่ม</button>
+    <button id="breath-stop-btn" class="btn btn-danger" onclick="breathStop()" disabled>หยุด</button>
+    <button id="breath-reset-btn" class="btn btn-neutral" onclick="breathReset()">รีเซ็ต</button>
+  </div>
+</div>
+
 <script>
 // ── Audio ──────────────────────────────────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -408,6 +456,8 @@ function beep(freq, dur, vol = 0.4, type = 'sine') {
   } catch (e) {}
 }
 
+function soundBreatheIn()  { beep(528, 0.5, 0.2, 'sine'); setTimeout(() => beep(660, 0.6, 0.15, 'sine'), 280); }
+function soundBreatheOut() { beep(440, 0.5, 0.2, 'sine'); setTimeout(() => beep(330, 0.6, 0.15, 'sine'), 280); }
 function soundCountdown() { beep(880, 0.12, 0.3); }
 function soundStart()     { beep(1047, 0.08); setTimeout(() => beep(1319, 0.15), 80); setTimeout(() => beep(1568, 0.25), 170); }
 function soundStop()      { beep(523, 0.08); setTimeout(() => beep(392, 0.25), 80); }
@@ -429,9 +479,9 @@ function setRing(el, ratio, color) {
 }
 
 function switchTab(mode) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['hang','interval','quick'][i] === mode));
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['hang','interval','quick','breath'][i] === mode));
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + (mode === 'interval' ? 'interval' : mode)).classList.add('active');
+  document.getElementById('screen-' + mode).classList.add('active');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -792,10 +842,104 @@ function quickReset() {
   quickUpdateUI();
 }
 
+// ══════════════════════════════════════════════════════════════
+// BREATHING TIMER
+// ══════════════════════════════════════════════════════════════
+const BREATH_IN  = 4;
+const BREATH_OUT = 8;
+
+let breathTimer    = null;
+let breathPhase    = 'idle'; // idle | inhale | exhale
+let breathCycles   = 0;
+let breathRemain   = BREATH_IN;
+let breathSegStart = null;
+
+function breathUpdateUI() {
+  const display  = document.getElementById('breath-display');
+  const sublabel = document.getElementById('breath-sublabel');
+  const badge    = document.getElementById('breath-badge');
+  const ring     = document.getElementById('breath-ring');
+
+  if (breathPhase === 'idle') {
+    display.textContent  = fmt(BREATH_IN);
+    sublabel.textContent = 'แตะเริ่ม';
+    badge.className      = 'badge badge-ready';
+    badge.textContent    = 'พร้อม';
+    setRing(ring, 0, '#6c63ff');
+  } else if (breathPhase === 'inhale') {
+    display.textContent  = fmt(breathRemain);
+    sublabel.textContent = '🫁 หายใจเข้า';
+    badge.className      = 'badge badge-breath-in';
+    badge.textContent    = 'หายใจเข้า';
+    setRing(ring, (BREATH_IN - breathRemain) / BREATH_IN, '#6c63ff');
+  } else {
+    display.textContent  = fmt(breathRemain);
+    sublabel.textContent = '💨 หายใจออก';
+    badge.className      = 'badge badge-breath-out';
+    badge.textContent    = 'หายใจออก';
+    setRing(ring, breathRemain / BREATH_OUT, '#00cec9');
+  }
+
+  document.getElementById('breath-cycles').textContent = breathCycles;
+}
+
+function breathStart() {
+  if (breathPhase !== 'idle') return;
+  getAudioCtx();
+  breathPhase    = 'inhale';
+  breathRemain   = BREATH_IN;
+  breathSegStart = performance.now();
+  document.getElementById('breath-start-btn').disabled = true;
+  document.getElementById('breath-stop-btn').disabled  = false;
+  soundBreatheIn();
+  breathUpdateUI();
+
+  breathTimer = setInterval(() => {
+    const dur    = breathPhase === 'inhale' ? BREATH_IN : BREATH_OUT;
+    const elapsed = (performance.now() - breathSegStart) / 1000;
+    breathRemain  = Math.max(0, dur - elapsed);
+
+    if (breathRemain <= 0) {
+      if (breathPhase === 'inhale') {
+        breathPhase    = 'exhale';
+        breathRemain   = BREATH_OUT;
+        breathSegStart = performance.now();
+        soundBreatheOut();
+      } else {
+        breathCycles++;
+        breathPhase    = 'inhale';
+        breathRemain   = BREATH_IN;
+        breathSegStart = performance.now();
+        soundBreatheIn();
+      }
+    }
+
+    breathUpdateUI();
+  }, 200);
+}
+
+function breathStop() {
+  if (breathPhase === 'idle') return;
+  clearInterval(breathTimer);
+  breathPhase  = 'idle';
+  breathRemain = BREATH_IN;
+  document.getElementById('breath-start-btn').disabled = false;
+  document.getElementById('breath-stop-btn').disabled  = true;
+  soundStop();
+  breathUpdateUI();
+}
+
+function breathReset() {
+  breathStop();
+  breathCycles = 0;
+  breathUpdateUI();
+}
+
 // ── Init ───────────────────────────────────────────────────────
 hangUpdateUI();
 intUpdateUI();
 quickUpdateUI();
+breathUpdateUI();
 
 // Unlock audio on first touch
 document.addEventListener('touchstart', () => { try { getAudioCtx(); } catch(e){} }, { once: true });
