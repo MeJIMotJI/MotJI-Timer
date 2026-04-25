@@ -489,24 +489,24 @@ function hangStart() {
   hangUpdateUI();
   soundCountdown();
 
-  hangTimer = setInterval(() => {
-    if (hangPhase === 'countdown') {
-      hangCDVal--;
-      if (hangCDVal <= 0) {
-        hangPhase = 'hanging';
-        hangStartTime = performance.now();
-        soundStart();
-      } else {
-        soundCountdown();
-      }
-    } else if (hangPhase === 'hanging') {
-      hangElapsed = (performance.now() - hangStartTime) / 1000;
-      if (hangElapsed >= 5 && Math.round(hangElapsed) % 30 === 0 && Math.floor(hangElapsed) !== Math.floor(hangElapsed - 1)) {
-        soundTick();
-      }
+  let hangCDTimer = setInterval(() => {
+    hangCDVal--;
+    if (hangCDVal <= 0) {
+      clearInterval(hangCDTimer);
+      hangPhase = 'hanging';
+      hangStartTime = performance.now();
+      hangUpdateUI();
+      soundStart();
+      hangTimer = setInterval(() => {
+        hangElapsed = (performance.now() - hangStartTime) / 1000;
+        hangUpdateUI();
+      }, 200);
+    } else {
+      soundCountdown();
+      hangUpdateUI();
     }
-    hangUpdateUI();
-  }, 200);
+  }, 1000);
+  hangTimer = hangCDTimer;
 }
 
 function hangStop() {
@@ -681,13 +681,15 @@ function intReset() {
 let quickDuration = 30;
 let quickRemain = 30;
 let quickTimer = null;
-let quickPhase = 'idle'; // idle | running | done
+let quickPhase = 'idle'; // idle | running | paused | done
 let quickSegStart = null;
+let quickRemainAtPause = 30;
 
 function quickSetPreset(sec, btn) {
   if (quickPhase !== 'idle') return;
   quickDuration = sec;
   quickRemain = sec;
+  quickRemainAtPause = sec;
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
   quickUpdateUI();
@@ -698,6 +700,8 @@ function quickUpdateUI() {
   const sublabel = document.getElementById('quick-sublabel');
   const badge = document.getElementById('quick-badge');
   const ring = document.getElementById('quick-ring');
+  const startBtn = document.getElementById('quick-start-btn');
+  const stopBtn = document.getElementById('quick-stop-btn');
 
   const ratio = quickRemain / quickDuration;
 
@@ -707,34 +711,57 @@ function quickUpdateUI() {
     badge.className = 'badge badge-ready';
     badge.textContent = 'พร้อม';
     setRing(ring, 1, '#f9ca24');
+    startBtn.textContent = 'เริ่ม';
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
   } else if (quickPhase === 'running') {
     display.textContent = fmt(quickRemain);
     sublabel.textContent = 'กำลังนับ…';
     badge.className = 'badge badge-countdown';
     badge.textContent = 'กำลังทำ';
     setRing(ring, ratio, ratio > 0.4 ? '#f9ca24' : ratio > 0.15 ? '#ff8800' : '#ff4757');
+    startBtn.textContent = 'เริ่ม';
+    startBtn.disabled = true;
+    stopBtn.textContent = 'หยุด';
+    stopBtn.disabled = false;
+  } else if (quickPhase === 'paused') {
+    display.textContent = fmt(quickRemain);
+    sublabel.textContent = 'หยุดชั่วคราว';
+    badge.className = 'badge badge-ready';
+    badge.textContent = 'PAUSED';
+    setRing(ring, ratio, '#888899');
+    startBtn.textContent = 'ดำเนินต่อ';
+    startBtn.disabled = false;
+    stopBtn.textContent = 'หยุด';
+    stopBtn.disabled = true;
   } else {
     display.textContent = '0:00';
     sublabel.textContent = 'เสร็จแล้ว!';
     badge.className = 'badge badge-done';
     badge.textContent = 'เสร็จ!';
     setRing(ring, 0, '#43e97b');
+    startBtn.textContent = 'เริ่มใหม่';
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
   }
 }
 
 function quickStart() {
-  if (quickPhase !== 'idle') return;
+  if (quickPhase === 'done') {
+    quickReset();
+    return;
+  }
+  if (quickPhase !== 'idle' && quickPhase !== 'paused') return;
   getAudioCtx();
   quickPhase = 'running';
   quickSegStart = performance.now();
-  document.getElementById('quick-start-btn').disabled = true;
-  document.getElementById('quick-stop-btn').disabled = false;
+  quickRemainAtPause = quickRemain;
   soundStart();
   quickUpdateUI();
 
   quickTimer = setInterval(() => {
     const elapsed = (performance.now() - quickSegStart) / 1000;
-    quickRemain = Math.max(0, quickDuration - elapsed);
+    quickRemain = Math.max(0, quickRemainAtPause - elapsed);
 
     const rem = Math.ceil(quickRemain);
     if (rem <= 3 && rem >= 1 && Math.abs(quickRemain - rem) < 0.25) soundCountdown();
@@ -743,8 +770,6 @@ function quickStart() {
       quickPhase = 'done';
       clearInterval(quickTimer);
       soundDone();
-      document.getElementById('quick-start-btn').disabled = false;
-      document.getElementById('quick-stop-btn').disabled = true;
     }
 
     quickUpdateUI();
@@ -752,17 +777,18 @@ function quickStart() {
 }
 
 function quickStop() {
+  if (quickPhase !== 'running') return;
   clearInterval(quickTimer);
-  quickPhase = 'idle';
-  quickRemain = quickDuration;
-  document.getElementById('quick-start-btn').disabled = false;
-  document.getElementById('quick-stop-btn').disabled = true;
+  quickPhase = 'paused';
   soundStop();
   quickUpdateUI();
 }
 
 function quickReset() {
-  quickStop();
+  clearInterval(quickTimer);
+  quickPhase = 'idle';
+  quickRemain = quickDuration;
+  quickRemainAtPause = quickDuration;
   quickUpdateUI();
 }
 
