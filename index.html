@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MotJI Timer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --card: #22222f;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --green: #43e97b;
+    --yellow: #f9ca24;
+    --red: #ff4757;
+    --text: #f0f0f5;
+    --muted: #888899;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 20px 16px 12px;
+    text-align: center;
+  }
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Mode tabs ── */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    padding: 0 16px 16px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 6px;
+    border: none;
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .tab .icon { font-size: 1.4rem; }
+  .tab.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  /* ── Screens ── */
+  .screen { display: none; flex: 1; flex-direction: column; padding: 0 16px 24px; }
+  .screen.active { display: flex; }
+
+  /* ── Timer ring ── */
+  .ring-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px 0 20px;
+    position: relative;
+  }
+  .ring-svg { transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--surface); stroke-width: 10; }
+  .ring-fg { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 0.5s linear, stroke 0.3s; }
+  .timer-center {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .timer-display {
+    font-size: 4rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+  .timer-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 6px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── Status badge ── */
+  .status-badge {
+    text-align: center;
+    margin-bottom: 16px;
+    min-height: 28px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 5px 18px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .badge-countdown { background: #f9ca2422; color: var(--yellow); }
+  .badge-hang      { background: #6c63ff22; color: var(--accent); }
+  .badge-fast      { background: #ff475722; color: var(--red); }
+  .badge-slow      { background: #43e97b22; color: var(--green); }
+  .badge-ready     { background: #88889922; color: var(--muted); }
+  .badge-done      { background: #43e97b33; color: var(--green); }
+
+  /* ── Interval info ── */
+  .interval-info {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .info-card {
+    flex: 1;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+  }
+  .info-card .val { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .info-card .lbl { font-size: 0.7rem; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ── Buttons ── */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: auto;
+  }
+  .btn {
+    flex: 1;
+    padding: 18px;
+    border: none;
+    border-radius: 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-danger  { background: var(--red); color: #fff; }
+  .btn-neutral { background: var(--surface); color: var(--text); }
+  .btn-success { background: var(--green); color: #000; }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+
+  /* ── Quick timer preset buttons ── */
+  .preset-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .preset-btn {
+    flex: 1;
+    padding: 14px;
+    border: 2px solid var(--surface);
+    border-radius: 14px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .preset-btn.selected {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #6c63ff15;
+  }
+  .preset-btn:active { transform: scale(0.96); }
+
+  /* ── Hang stats ── */
+  .stat-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    flex: 1;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-card .val { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-card .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+
+  /* ── Interval set counter ── */
+  .set-dots {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    min-height: 18px;
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    transition: background 0.3s;
+  }
+  .dot.fast-done { background: var(--red); }
+  .dot.slow-done { background: var(--green); }
+  .dot.current   { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MOTJI TIMER</h1>
+</header>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('hang')">
+    <span class="icon">💪</span>Dead Hang
+  </button>
+  <button class="tab" onclick="switchTab('interval')">
+    <span class="icon">🏃</span>Interval
+  </button>
+  <button class="tab" onclick="switchTab('quick')">
+    <span class="icon">⚡</span>Quick
+  </button>
+</div>
+
+<!-- ══════════════════ DEAD HANG ══════════════════ -->
+<div id="screen-hang" class="screen active">
+  <div class="status-badge">
+    <span id="hang-badge" class="badge badge-ready">พร้อม</span>
+  </div>
+
+  <div class="ring-wrap">
+    <svg class="ring-svg" width="220" height="220" viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="100"/>
+      <circle id="hang-ring" class="ring-fg" cx="110" cy="110" r="100"
+        stroke="#6c63ff"
+        stroke-dasharray="628.3"
+        stroke-dashoffset="0"/>
+    </svg>
+    <div class="timer-center">
+      <div id="hang-display" class="timer-display">0:00</div>
+      <div id="hang-sublabel" class="timer-label">แตะเริ่ม</div>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="val" id="hang-best">0:00</div>
+      <div class="lbl">สถิติ</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" id="hang-last">-</div>
+      <div class="lbl">ครั้งล่าสุด</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" id="hang-count">0</div>
+      <div class="lbl">รอบนี้</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="hang-start-btn" class="btn btn-primary" onclick="hangStart()">เริ่ม</button>
+    <button id="hang-stop-btn" class="btn btn-danger" onclick="hangStop()" disabled>หยุด</button>
+    <button id="hang-reset-btn" class="btn btn-neutral" onclick="hangReset()">รีเซ็ต</button>
+  </div>
+</div>
+
+<!-- ══════════════════ INTERVAL RUN ══════════════════ -->
+<div id="screen-interval" class="screen">
+  <div class="status-badge">
+    <span id="int-badge" class="badge badge-ready">พร้อม</span>
+  </div>
+
+  <div class="ring-wrap">
+    <svg class="ring-svg" width="220" height="220" viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="100"/>
+      <circle id="int-ring" class="ring-fg" cx="110" cy="110" r="100"
+        stroke="#43e97b"
+        stroke-dasharray="628.3"
+        stroke-dashoffset="0"/>
+    </svg>
+    <div class="timer-center">
+      <div id="int-display" class="timer-display">0:30</div>
+      <div id="int-sublabel" class="timer-label">แตะเริ่ม</div>
+    </div>
+  </div>
+
+  <div class="interval-info">
+    <div class="info-card">
+      <div class="val" id="int-set-display" style="color:var(--yellow)">1</div>
+      <div class="lbl">เซ็ต</div>
+    </div>
+    <div class="info-card">
+      <div class="val" id="int-total-display" style="color:var(--muted)">0:00</div>
+      <div class="lbl">รวม</div>
+    </div>
+    <div class="info-card">
+      <div class="val" id="int-next-display" style="color:var(--muted)">-</div>
+      <div class="lbl">ต่อไป</div>
+    </div>
+  </div>
+
+  <div class="set-dots" id="int-dots"></div>
+
+  <div class="btn-row">
+    <button id="int-start-btn" class="btn btn-primary" onclick="intStart()">เริ่ม</button>
+    <button id="int-stop-btn" class="btn btn-danger" onclick="intStop()" disabled>หยุด</button>
+    <button id="int-reset-btn" class="btn btn-neutral" onclick="intReset()">รีเซ็ต</button>
+  </div>
+</div>
+
+<!-- ══════════════════ QUICK TIMER ══════════════════ -->
+<div id="screen-quick" class="screen">
+  <div class="status-badge">
+    <span id="quick-badge" class="badge badge-ready">พร้อม</span>
+  </div>
+
+  <div class="ring-wrap">
+    <svg class="ring-svg" width="220" height="220" viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="100"/>
+      <circle id="quick-ring" class="ring-fg" cx="110" cy="110" r="100"
+        stroke="#f9ca24"
+        stroke-dasharray="628.3"
+        stroke-dashoffset="0"/>
+    </svg>
+    <div class="timer-center">
+      <div id="quick-display" class="timer-display">0:30</div>
+      <div id="quick-sublabel" class="timer-label">เลือกเวลา</div>
+    </div>
+  </div>
+
+  <div class="section-title">เลือกเวลา</div>
+  <div class="preset-row">
+    <button class="preset-btn selected" onclick="quickSetPreset(30, this)">30 วิ</button>
+    <button class="preset-btn" onclick="quickSetPreset(120, this)">2 นาที</button>
+  </div>
+
+  <div class="btn-row">
+    <button id="quick-start-btn" class="btn btn-success" onclick="quickStart()">เริ่ม</button>
+    <button id="quick-stop-btn" class="btn btn-danger" onclick="quickStop()" disabled>หยุด</button>
+    <button id="quick-reset-btn" class="btn btn-neutral" onclick="quickReset()">รีเซ็ต</button>
+  </div>
+</div>
+
+<script>
+// ── Audio ──────────────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  return audioCtx;
+}
+
+function beep(freq, dur, vol = 0.4, type = 'sine') {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + dur);
+  } catch (e) {}
+}
+
+function soundCountdown() { beep(880, 0.12, 0.3); }
+function soundStart()     { beep(1047, 0.08); setTimeout(() => beep(1319, 0.15), 80); setTimeout(() => beep(1568, 0.25), 170); }
+function soundStop()      { beep(523, 0.08); setTimeout(() => beep(392, 0.25), 80); }
+function soundSwitch()    { beep(659, 0.06); setTimeout(() => beep(880, 0.15), 60); }
+function soundDone()      { [0,100,200,350].forEach((d,i) => setTimeout(() => beep([523,659,784,1047][i], 0.2, 0.5), d)); }
+function soundTick()      { beep(1200, 0.05, 0.2, 'square'); }
+
+// ── Helpers ────────────────────────────────────────────────────
+function fmt(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function setRing(el, ratio, color) {
+  const circ = 628.3;
+  el.style.strokeDashoffset = circ * (1 - Math.max(0, Math.min(1, ratio)));
+  if (color) el.style.stroke = color;
+}
+
+function switchTab(mode) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['hang','interval','quick'][i] === mode));
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + (mode === 'interval' ? 'interval' : mode)).classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════════════
+// DEAD HANG
+// ══════════════════════════════════════════════════════════════
+const HANG_COUNTDOWN = 5;
+let hangTimer = null;
+let hangPhase = 'idle'; // idle | countdown | hanging
+let hangCount = 0;
+let hangBest = 0;
+let hangLast = null;
+let hangElapsed = 0;
+let hangCDVal = 0;
+let hangStartTime = null;
+
+function hangUpdateUI() {
+  const display = document.getElementById('hang-display');
+  const sublabel = document.getElementById('hang-sublabel');
+  const badge = document.getElementById('hang-badge');
+  const ring = document.getElementById('hang-ring');
+
+  if (hangPhase === 'idle') {
+    display.textContent = '0:00';
+    sublabel.textContent = 'แตะเริ่ม';
+    badge.className = 'badge badge-ready';
+    badge.textContent = 'พร้อม';
+    setRing(ring, 1, '#6c63ff');
+  } else if (hangPhase === 'countdown') {
+    display.textContent = hangCDVal;
+    sublabel.textContent = 'เตรียมตัว…';
+    badge.className = 'badge badge-countdown';
+    badge.textContent = 'นับถอยหลัง';
+    setRing(ring, hangCDVal / HANG_COUNTDOWN, '#f9ca24');
+  } else {
+    display.textContent = fmt(hangElapsed);
+    sublabel.textContent = 'กำลังแขวน';
+    badge.className = 'badge badge-hang';
+    badge.textContent = 'DEAD HANG';
+    setRing(ring, 1, '#6c63ff');
+  }
+
+  document.getElementById('hang-best').textContent = fmt(hangBest);
+  document.getElementById('hang-last').textContent = hangLast !== null ? fmt(hangLast) : '-';
+  document.getElementById('hang-count').textContent = hangCount;
+}
+
+function hangStart() {
+  if (hangPhase !== 'idle') return;
+  getAudioCtx(); // unlock
+  hangPhase = 'countdown';
+  hangCDVal = HANG_COUNTDOWN;
+  hangElapsed = 0;
+  document.getElementById('hang-start-btn').disabled = true;
+  document.getElementById('hang-stop-btn').disabled = false;
+  hangUpdateUI();
+  soundCountdown();
+
+  hangTimer = setInterval(() => {
+    if (hangPhase === 'countdown') {
+      hangCDVal--;
+      if (hangCDVal <= 0) {
+        hangPhase = 'hanging';
+        hangStartTime = performance.now();
+        soundStart();
+      } else {
+        soundCountdown();
+      }
+    } else if (hangPhase === 'hanging') {
+      hangElapsed = (performance.now() - hangStartTime) / 1000;
+      if (hangElapsed >= 5 && Math.round(hangElapsed) % 30 === 0 && Math.floor(hangElapsed) !== Math.floor(hangElapsed - 1)) {
+        soundTick();
+      }
+    }
+    hangUpdateUI();
+  }, 200);
+}
+
+function hangStop() {
+  if (hangPhase === 'idle') return;
+  clearInterval(hangTimer);
+  if (hangPhase === 'hanging') {
+    hangLast = hangElapsed;
+    if (hangElapsed > hangBest) hangBest = hangElapsed;
+    hangCount++;
+    soundStop();
+  }
+  hangPhase = 'idle';
+  document.getElementById('hang-start-btn').disabled = false;
+  document.getElementById('hang-stop-btn').disabled = true;
+  hangUpdateUI();
+}
+
+function hangReset() {
+  hangStop();
+  hangCount = 0;
+  hangBest = 0;
+  hangLast = null;
+  hangElapsed = 0;
+  hangUpdateUI();
+}
+
+// ══════════════════════════════════════════════════════════════
+// INTERVAL RUN
+// ══════════════════════════════════════════════════════════════
+const INT_FAST = 30;
+const INT_SLOW = 90;
+const INT_MAX_SETS = 10;
+
+let intTimer = null;
+let intPhase = 'idle'; // idle | running
+let intCurrent = 'fast'; // fast | slow
+let intRemain = INT_FAST;
+let intSetNum = 1;
+let intTotalElapsed = 0;
+let intTotalStart = null;
+let intSegStart = null;
+let intCompletedSets = []; // array of 'fast' or 'slow'
+
+function intBuildDots() {
+  const container = document.getElementById('int-dots');
+  container.innerHTML = '';
+  // Show dots for expected sets (alternating fast/slow)
+  const total = INT_MAX_SETS * 2;
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    const idx = i;
+    if (idx < intCompletedSets.length) {
+      dot.classList.add(intCompletedSets[idx] === 'fast' ? 'fast-done' : 'slow-done');
+    } else if (idx === intCompletedSets.length && intPhase === 'running') {
+      dot.classList.add('current');
+    }
+    container.appendChild(dot);
+  }
+}
+
+function intUpdateUI() {
+  const display = document.getElementById('int-display');
+  const sublabel = document.getElementById('int-sublabel');
+  const badge = document.getElementById('int-badge');
+  const ring = document.getElementById('int-ring');
+  const nextEl = document.getElementById('int-next-display');
+
+  if (intPhase === 'idle') {
+    display.textContent = fmt(INT_FAST);
+    sublabel.textContent = 'แตะเริ่ม';
+    badge.className = 'badge badge-ready';
+    badge.textContent = 'พร้อม';
+    setRing(ring, 1, '#43e97b');
+    document.getElementById('int-set-display').textContent = 1;
+    document.getElementById('int-total-display').textContent = '0:00';
+    nextEl.textContent = '-';
+  } else {
+    const dur = intCurrent === 'fast' ? INT_FAST : INT_SLOW;
+    const ratio = intRemain / dur;
+    const color = intCurrent === 'fast' ? '#ff4757' : '#43e97b';
+
+    display.textContent = fmt(intRemain);
+    sublabel.textContent = intCurrent === 'fast' ? '🔴 วิ่งเร็ว' : '🟢 วิ่งช้า';
+    badge.className = 'badge ' + (intCurrent === 'fast' ? 'badge-fast' : 'badge-slow');
+    badge.textContent = intCurrent === 'fast' ? 'FAST' : 'SLOW';
+    setRing(ring, ratio, color);
+
+    const next = intCurrent === 'fast' ? INT_SLOW : INT_FAST;
+    nextEl.textContent = fmt(next);
+    nextEl.style.color = intCurrent === 'fast' ? 'var(--green)' : 'var(--red)';
+    document.getElementById('int-set-display').textContent = intSetNum;
+
+    const elapsed = intTotalStart ? (performance.now() - intTotalStart) / 1000 : 0;
+    document.getElementById('int-total-display').textContent = fmt(elapsed);
+  }
+
+  intBuildDots();
+}
+
+function intStart() {
+  if (intPhase !== 'idle') return;
+  getAudioCtx();
+  intPhase = 'running';
+  intCurrent = 'fast';
+  intRemain = INT_FAST;
+  intSetNum = 1;
+  intCompletedSets = [];
+  intTotalStart = performance.now();
+  intSegStart = performance.now();
+
+  document.getElementById('int-start-btn').disabled = true;
+  document.getElementById('int-stop-btn').disabled = false;
+  soundStart();
+  intUpdateUI();
+
+  intTimer = setInterval(() => {
+    const segElapsed = (performance.now() - intSegStart) / 1000;
+    const dur = intCurrent === 'fast' ? INT_FAST : INT_SLOW;
+    intRemain = Math.max(0, dur - segElapsed);
+
+    // Warning beeps at last 3 seconds
+    const rem = Math.ceil(intRemain);
+    if (rem <= 3 && rem >= 1 && Math.floor(segElapsed) !== Math.floor(segElapsed - 0.2)) {
+      if (Math.abs(intRemain - rem) < 0.25) soundCountdown();
+    }
+
+    if (intRemain <= 0) {
+      intCompletedSets.push(intCurrent);
+      if (intCurrent === 'slow') intSetNum++;
+
+      if (intSetNum > INT_MAX_SETS && intCurrent === 'slow') {
+        intPhase = 'idle';
+        clearInterval(intTimer);
+        soundDone();
+        document.getElementById('int-badge').className = 'badge badge-done';
+        document.getElementById('int-badge').textContent = 'เสร็จ!';
+        document.getElementById('int-start-btn').disabled = false;
+        document.getElementById('int-stop-btn').disabled = true;
+        intUpdateUI();
+        return;
+      }
+
+      intCurrent = intCurrent === 'fast' ? 'slow' : 'fast';
+      intRemain = intCurrent === 'fast' ? INT_FAST : INT_SLOW;
+      intSegStart = performance.now();
+      soundSwitch();
+    }
+
+    intUpdateUI();
+  }, 200);
+}
+
+function intStop() {
+  clearInterval(intTimer);
+  intPhase = 'idle';
+  intCompletedSets = [];
+  document.getElementById('int-start-btn').disabled = false;
+  document.getElementById('int-stop-btn').disabled = true;
+  soundStop();
+  intUpdateUI();
+}
+
+function intReset() {
+  intStop();
+  intUpdateUI();
+}
+
+// ══════════════════════════════════════════════════════════════
+// QUICK TIMER
+// ══════════════════════════════════════════════════════════════
+let quickDuration = 30;
+let quickRemain = 30;
+let quickTimer = null;
+let quickPhase = 'idle'; // idle | running | done
+let quickSegStart = null;
+
+function quickSetPreset(sec, btn) {
+  if (quickPhase !== 'idle') return;
+  quickDuration = sec;
+  quickRemain = sec;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  quickUpdateUI();
+}
+
+function quickUpdateUI() {
+  const display = document.getElementById('quick-display');
+  const sublabel = document.getElementById('quick-sublabel');
+  const badge = document.getElementById('quick-badge');
+  const ring = document.getElementById('quick-ring');
+
+  const ratio = quickRemain / quickDuration;
+
+  if (quickPhase === 'idle') {
+    display.textContent = fmt(quickRemain);
+    sublabel.textContent = 'เลือกเวลา';
+    badge.className = 'badge badge-ready';
+    badge.textContent = 'พร้อม';
+    setRing(ring, 1, '#f9ca24');
+  } else if (quickPhase === 'running') {
+    display.textContent = fmt(quickRemain);
+    sublabel.textContent = 'กำลังนับ…';
+    badge.className = 'badge badge-countdown';
+    badge.textContent = 'กำลังทำ';
+    setRing(ring, ratio, ratio > 0.4 ? '#f9ca24' : ratio > 0.15 ? '#ff8800' : '#ff4757');
+  } else {
+    display.textContent = '0:00';
+    sublabel.textContent = 'เสร็จแล้ว!';
+    badge.className = 'badge badge-done';
+    badge.textContent = 'เสร็จ!';
+    setRing(ring, 0, '#43e97b');
+  }
+}
+
+function quickStart() {
+  if (quickPhase !== 'idle') return;
+  getAudioCtx();
+  quickPhase = 'running';
+  quickSegStart = performance.now();
+  document.getElementById('quick-start-btn').disabled = true;
+  document.getElementById('quick-stop-btn').disabled = false;
+  soundStart();
+  quickUpdateUI();
+
+  quickTimer = setInterval(() => {
+    const elapsed = (performance.now() - quickSegStart) / 1000;
+    quickRemain = Math.max(0, quickDuration - elapsed);
+
+    const rem = Math.ceil(quickRemain);
+    if (rem <= 3 && rem >= 1 && Math.abs(quickRemain - rem) < 0.25) soundCountdown();
+
+    if (quickRemain <= 0) {
+      quickPhase = 'done';
+      clearInterval(quickTimer);
+      soundDone();
+      document.getElementById('quick-start-btn').disabled = false;
+      document.getElementById('quick-stop-btn').disabled = true;
+    }
+
+    quickUpdateUI();
+  }, 200);
+}
+
+function quickStop() {
+  clearInterval(quickTimer);
+  quickPhase = 'idle';
+  quickRemain = quickDuration;
+  document.getElementById('quick-start-btn').disabled = false;
+  document.getElementById('quick-stop-btn').disabled = true;
+  soundStop();
+  quickUpdateUI();
+}
+
+function quickReset() {
+  quickStop();
+  quickUpdateUI();
+}
+
+// ── Init ───────────────────────────────────────────────────────
+hangUpdateUI();
+intUpdateUI();
+quickUpdateUI();
+
+// Unlock audio on first touch
+document.addEventListener('touchstart', () => { try { getAudioCtx(); } catch(e){} }, { once: true });
+</script>
+</body>
+</html>
